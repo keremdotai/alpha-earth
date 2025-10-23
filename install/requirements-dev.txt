@@ -1,0 +1,18 @@
+# requirements-dev.txt
+#
+# This file contains the development dependencies for the project.
+# You can install them with:
+#
+# ```bash
+# pip install -r requirements-dev.txt
+# ```
+#
+
+# Pre-commit hooks
+pre-commit==4.3.0
+
+# Code formatters and linters
+black==25.1.0
+isort==6.0.1
+flake8==7.3.0
+flake8-copyright==0.2.4

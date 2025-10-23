@@ -1,0 +1,31 @@
+# .pre-commit-config.yaml
+#
+# pre-commit is a tool that runs checks on your code before you commit it.
+# You can find the configuration details here:
+# https://pre-commit.com/
+#
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0 # Use the latest version
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=10240'] # Sets the max file size to 10MB
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        additional_dependencies:
+          - flake8-copyright==0.2.4
