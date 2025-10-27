@@ -7,8 +7,10 @@ from typing import Literal
 import ee
 import geemap
 
+from .earthengine import EarthEngine
 
-class AlphaEarthDownloader:
+
+class AlphaEarthDownloader(EarthEngine):
     """
     Download AlphaEarth embeddings from Google Earth Engine.
     """
@@ -28,37 +30,9 @@ class AlphaEarthDownloader:
         authenticate:
             Whether to authenticate with Earth Engine.
         """
-        if authenticate:
-            try:
-                # Try to initialize with project
-                if project:
-                    ee.Initialize(project=project)
-                else:
-                    # Try default initialization first
-                    try:
-                        ee.Initialize()
-                    except Exception as e:
-                        if (
-                            "project" in str(e).lower()
-                            or "not registered" in str(e).lower()
-                        ):
-                            raise ValueError(
-                                "Earth Engine requires a project ID. Please provide your "
-                                "Google Cloud project ID:\n"
-                                "  downloader = AlphaEarthDownloader(project='your-project-id')\n"
-                                "Or set the EE_PROJECT environment variable."
-                            ) from e
-                        raise
-            except Exception as e:
-                if "project" in str(e).lower() or "not registered" in str(e).lower():
-                    raise
-                print("Authentication required. Running ee.Authenticate()...")
-                ee.Authenticate()
-                if project:
-                    ee.Initialize(project=project)
-                else:
-                    ee.Initialize()
+        EarthEngine.__init__(self, project, authenticate)
 
+        # Initialize the collection
         self.collection = ee.ImageCollection(self.DATASET_ID)
 
     def download_by_region(
