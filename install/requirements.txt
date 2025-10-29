@@ -20,6 +20,7 @@ xarray>=2025.10.1           # Multi-dimensional array manipulation tool
 
 # Visualization
 localtileserver>=0.10.6     # Local tile server for raster data visualization
+tqdm>=4.67.1                # 
 
 # IPython utilities
 ipykernel==7.0.1

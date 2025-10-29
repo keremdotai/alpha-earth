@@ -17,6 +17,7 @@ exclude =
     build,
     dist,
     *.egg-info
+    .venv
 
 copyright-check = true
 copyright-regexp = # Copyright \(c\) kerem.ai\. All Rights Reserved\.

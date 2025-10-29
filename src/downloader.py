@@ -6,6 +6,8 @@ from typing import Literal
 
 import ee
 import geemap
+import numpy as np
+from tqdm import tqdm
 
 from .earthengine import EarthEngine
 
@@ -37,21 +39,23 @@ class AlphaEarthDownloader(EarthEngine):
 
     def download_by_region(
         self,
-        output_path: str | Path | None,
+        output_dir: str | Path | None,
         start_date: str,
         end_date: str,
         region: ee.FeatureCollection | ee.Geometry,
         scale: int = 10,
         bands: list[str] | None = None,
         dtype: Literal["uint8", "uint16", "float32", "float64"] = "float32",
+        prefix: str = "",
     ) -> ee.Image | dict:
         """
         Download AlphaEarth embeddings for a region.
 
         Parameters
         ----------
-        output_path:
-            Path to save the output file (GeoTIFF).
+        output_dir:
+            Path to save the output file/s (GeoTIFF).
+            If None, an ee.Image object will be returned.
         start_date:
             Start date in format 'YYYY-MM-DD'.
         region:
@@ -62,6 +66,8 @@ class AlphaEarthDownloader(EarthEngine):
             List of band names to download (default: all 64 bands).
         dtype:
             Data type of the output file (default: uint8).
+        prefix:
+            Prefix to add to the output filename/s.
 
         Returns
         -------
@@ -75,7 +81,7 @@ class AlphaEarthDownloader(EarthEngine):
             geometry = region
 
         return self._download_image(
-            output_path=output_path,
+            output_dir=output_dir,
             start_date=start_date,
             end_date=end_date,
             geometry=geometry,
@@ -83,11 +89,12 @@ class AlphaEarthDownloader(EarthEngine):
             bands=bands,
             crs="EPSG:4326",
             dtype=dtype,
+            prefix=prefix,
         )
 
     def download_by_latlon(
         self,
-        output_path: str | Path | None,
+        output_dir: str | Path | None,
         start_date: str,
         end_date: str,
         min_lat: float,
@@ -103,10 +110,9 @@ class AlphaEarthDownloader(EarthEngine):
 
         Parameters
         ----------
-        output_path:
-            Path to save the output file (GeoTIFF).
-            If None, the image will be returned as an ee.Image object.
-            Otherwise, the image will be saved to the specified path.
+        output_dir:
+            Path to save the output file/s (GeoTIFF).
+            If None, an ee.Image object will be returned.
         start_date:
             Start date in format 'YYYY-MM-DD'.
         end_date:
@@ -136,7 +142,7 @@ class AlphaEarthDownloader(EarthEngine):
         bbox = ee.Geometry.Rectangle([min_lon, min_lat, max_lon, max_lat])
 
         return self._download_image(
-            output_path=output_path,
+            output_dir=output_dir,
             start_date=start_date,
             end_date=end_date,
             geometry=bbox,
@@ -148,7 +154,7 @@ class AlphaEarthDownloader(EarthEngine):
 
     def download_by_utm(
         self,
-        output_path: str,
+        output_dir: str | Path | None,
         start_date: str,
         end_date: str,
         utm_zone: int,
@@ -167,8 +173,9 @@ class AlphaEarthDownloader(EarthEngine):
 
         Parameters
         ----------
-        output_path:
-            Path to save the output file (GeoTIFF).
+        output_dir:
+            Path to save the output file/s (GeoTIFF).
+            If None, an ee.Image object will be returned.
         start_date:
             Start date in format 'YYYY-MM-DD'.
         end_date:
@@ -219,7 +226,7 @@ class AlphaEarthDownloader(EarthEngine):
         )
 
         return self._download_image(
-            output_path=output_path,
+            output_dir=output_dir,
             start_date=start_date,
             end_date=end_date,
             geometry=bbox,
@@ -231,22 +238,24 @@ class AlphaEarthDownloader(EarthEngine):
 
     def _download_image(
         self,
-        output_path: str | Path | None,
+        output_dir: str | Path | None,
         start_date: str,
         end_date: str,
         geometry: ee.Geometry,
         scale: int,
         bands: list[str] | None,
         crs: str,
-        dtype: Literal["uint8", "uint16", "float32", "float64"],
+        dtype: str,
+        prefix: str = "",
     ) -> ee.Image | dict:
         """
         Internal method to download embeddings.
 
         Parameters
         ----------
-        output_path:
-            Path to save the output file (GeoTIFF).
+        output_dir:
+            Directory to save the output file/s (GeoTIFF).
+            If None, an ee.Image object will be returned.
         start_date:
             Start date in format 'YYYY-MM-DD'.
         end_date:
@@ -261,6 +270,8 @@ class AlphaEarthDownloader(EarthEngine):
             Coordinate reference system.
         dtype:
             Data type of the output file.
+        prefix:
+            Prefix to add to the output filename/s.
 
         Returns
         -------
@@ -268,41 +279,26 @@ class AlphaEarthDownloader(EarthEngine):
             Dictionary with download information.
         """
         # Filter collection by date and location
-        filtered = self.collection.filterDate(start_date, end_date).filterBounds(
-            geometry
-        )
+        filtered = self.collection.filterDate(start_date, end_date)
+        filtered: ee.ImageCollection = filtered.filterBounds(geometry)
 
         # Get image count
         count = filtered.size().getInfo()
-
         if count == 0:
             raise ValueError("No images found for specified date range and location.")
-
-        # Mosaic images if multiple years/tiles
-        image = filtered.mosaic()
 
         # Select bands
         if bands is None:
             bands = self.BAND_NAMES
-        image = image.select(bands)
+        filtered = filtered.select(bands)
 
-        # Clip to geometry
-        image = image.clip(geometry)
-
-        # Convert to requested dtype
-        image = self._convert_dtype(image, dtype)
-
-        # Return image if no output path is provided
-        if output_path is None:
-            return image
-        output_path = Path(output_path)
+        # Return ee.Image object if output_dir is None
+        if output_dir is None:
+            return self._prepare_image(filtered.mosaic(), geometry, dtype)
 
         # Get image info
         # Use error margin for projected geometries (required for UTM)
-        try:
-            bounds = geometry.bounds(1).getInfo()  # 1 meter error margin
-        except BaseException:
-            bounds = geometry.bounds().getInfo()
+        bounds = self._get_bounds(geometry)
 
         info = {
             "start_date": start_date,
@@ -312,17 +308,117 @@ class AlphaEarthDownloader(EarthEngine):
             "scale": scale,
             "crs": crs,
             "num_images": count,
+            "files": [],
         }
 
-        # Download image from URL
-        info.update(self._download_from_url(image, scale, geometry, crs, output_path))
+        # Mkdir output directory
+        output_dir.mkdir(mode=0o777, parents=True, exist_ok=True)
+        assert output_dir.is_dir(), f"output_dir must be a directory: {output_dir}."
+
+        pbar = tqdm(
+            range(count), total=count, desc="Downloading images", colour="#00c8ff"
+        )
+        for i in pbar:
+            # Get the image from the collection
+            image = self._prepare_image(
+                ee.Image(filtered.toList(count).get(i)), geometry, dtype
+            )
+            img_geometry = image.geometry()
+
+            # Get the output path for the image
+            filename = self._get_filename(self._get_bounds(img_geometry), dtype, prefix)
+            path = output_dir / filename
+
+            # Download the image from the generated url
+            info["files"].append(
+                self._download_from_url(image, scale, img_geometry, crs, path)
+            )
 
         return info
 
     @classmethod
+    def _prepare_image(
+        cls, image: ee.Image, geometry: ee.Geometry, dtype: str
+    ) -> ee.Image:
+        """
+        Prepare the given image for download.
+
+        Parameter
+        ---------
+        image:
+            Earth Engine image object.
+        geometry:
+            Earth Engine geometry object.
+        dtype:
+            Data type of the output file.
+
+        Returns
+        -------
+        ee.Image:
+            Earth Engine image object.
+        """
+        # Clip the image to the geometry
+        image = image.clip(geometry)
+
+        # Convert the image to the requested dtype
+        image = cls._convert_dtype(image, dtype)
+
+        return image
+
+    @classmethod
+    def _get_bounds(cls, geometry: ee.Geometry) -> dict:
+        """
+        Get the bounds of the given geometry.
+
+        Parameters
+        ----------
+        geometry:
+            Earth Engine geometry object.
+
+        Returns
+        -------
+        dict:
+            Dictionary with bounds information.
+        """
+        try:
+            bounds = geometry.bounds(1).getInfo()  # 1 meter error margin
+        except BaseException:
+            bounds = geometry.bounds().getInfo()
+
+        return bounds
+
+    @classmethod
+    def _get_filename(cls, bounds: dict, dtype: str, prefix: str) -> str:
+        """
+        Get the filename for the given bounds.
+
+        Parameters
+        ----------
+        bounds:
+            Dictionary with bounds information.
+        dtype:
+            Data type of the output file.
+        prefix:
+            Prefix to add to the output filename.
+
+        Returns
+        -------
+        str:
+            Filename.
+        """
+        filename = prefix + "_" if prefix else ""
+        filename += f"{dtype}_"
+        coords = np.array(bounds["coordinates"][0])
+        max_lon, max_lat = np.max(coords, axis=0)
+        min_lon, min_lat = np.min(coords, axis=0)
+        filename += f"[{min_lat:.3f}|{max_lat:.3f}|{min_lon:.3f}|{max_lon:.3f}].tif"
+
+        return filename
+
+    @classmethod
     def _download_from_url(
         cls,
-        image: ee.Image | ee.ImageCollection,
+        image: ee.Image,
         scale: int,
         geometry: ee.Geometry,
         crs: str,
@@ -349,33 +445,22 @@ class AlphaEarthDownloader(EarthEngine):
         dict:
             Dictionary with download information.
         """
-        is_collection = isinstance(image, ee.ImageCollection)
-        if is_collection:
-            assert (
-                output_path.exists() and output_path.is_dir()
-            ), "Output path must be a directory if downloading an image collection."
-
         try:
-            if is_collection:
-                # Export image collection to directory
-                geemap.ee_export_image_collection(
-                    image, out_dir=output_path, scale=scale, region=geometry, crs=crs
-                )
-            else:
-                # Export image to file
-                geemap.ee_export_image(
-                    image, filename=output_path, scale=scale, region=geometry, crs=crs
-                )
+            # Export image to file
+            geemap.ee_export_image(
+                image,
+                filename=output_path,
+                scale=scale,
+                region=geometry,
+                crs=crs,
+                verbose=False,
+            )
             return {"success": True, "output_path": output_path}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     @classmethod
-    def _convert_dtype(
-        cls,
-        image: ee.Image | ee.ImageCollection,
-        dtype: Literal["uint8", "uint16", "float32", "float64"],
-    ) -> ee.Image | ee.ImageCollection:
+    def _convert_dtype(cls, image: ee.Image, dtype: str) -> ee.Image:
         """
         Internal method to convert the image to the requested dtype.
 

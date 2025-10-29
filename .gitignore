@@ -6,6 +6,8 @@
 # You can also customize the patterns in the below sections
 # according to your project's needs.
 
+outputs/
+
 ########################################################################################
 # Commonly ignored file patterns
 ########################################################################################
