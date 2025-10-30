@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .earthengine import EarthEngine
+from .utils import quantize_ee
 
 
 class AlphaEarthDownloader(EarthEngine):
@@ -45,7 +46,7 @@ class AlphaEarthDownloader(EarthEngine):
         region: ee.FeatureCollection | ee.Geometry,
         scale: int = 10,
         bands: list[str] | None = None,
-        dtype: Literal["uint8", "uint16", "float32", "float64"] = "float32",
+        dtype: Literal["uint8", "float32"] = "float32",
         prefix: str = "",
     ) -> ee.Image | dict:
         """
@@ -103,7 +104,7 @@ class AlphaEarthDownloader(EarthEngine):
         max_lon: float,
         scale: int = 10,
         bands: list[str] | None = None,
-        dtype: Literal["uint8", "uint16", "float32", "float64"] = "float32",
+        dtype: Literal["uint8", "float32"] = "float32",
     ) -> ee.Image | dict:
         """
         Download AlphaEarth embeddings for a lat/lon bounding box.
@@ -165,7 +166,7 @@ class AlphaEarthDownloader(EarthEngine):
         hemisphere: str = "N",
         scale: int = 10,
         bands: list[str] | None = None,
-        dtype: Literal["uint8", "uint16", "float32", "float64"] = "float32",
+        dtype: Literal["uint8", "float32"] = "float32",
     ) -> dict:
         """
         Download AlphaEarth embeddings for a UTM coordinate range.
@@ -477,13 +478,9 @@ class AlphaEarthDownloader(EarthEngine):
             Earth Engine image object with the requested dtype.
         """
         if dtype == "uint8":
-            return image.add(1).divide(2).multiply(255).clamp(0, 255).uint8()
-        elif dtype == "uint16":
-            return image.add(1).divide(2).multiply(65535).clamp(0, 65535).uint16()
+            return quantize_ee(image)
         elif dtype == "float32":
             return image.float()
-        elif dtype == "float64":
-            return image
         else:
             raise ValueError(f"Invalid dtype: {dtype}")
 

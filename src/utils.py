@@ -3,6 +3,8 @@
 import shutil
 from pathlib import Path
 
+import ee
+import numpy as np
 import rasterio
 from rasterio.merge import merge
 
@@ -56,7 +58,7 @@ def merge_tif_directory(
     assert input_dir.is_dir(), "Input directory must exist."
     files = list(input_dir.glob("*.tif"))
 
-    if output_path is None:
+    if not output_path:
         output_path = input_dir.with_suffix(".tif")
 
     # Merge the files
@@ -115,8 +117,48 @@ def merge_tif_files(
             file.unlink()
 
 
+def quantize_numpy(image: np.ndarray) -> np.ndarray:
+    """
+    Quantize an AlphaEarth embedding image with uint8 dtype.
+    """
+    image = np.abs(image) ** (1 / 2.0) * np.sign(image)
+    image = (np.clip(image * 127.5, -127, 127) + 128).astype(np.uint8)
+    return image
+
+
+def quantize_ee(image: ee.Image) -> ee.Image:
+    """
+    Quantize an AlphaEarth embedding image with uint8 dtype.
+    """
+    image = image.abs().pow(1 / 2.0).multiply(image.signum())
+    image = image.multiply(127.5).clamp(-127, 127).add(128).uint8()
+    return image
+
+
+def dequantize_numpy(image: np.ndarray) -> np.ndarray:
+    """
+    Dequantize an AlphaEarth embedding image with uint8 dtype.
+    """
+    image = (image.astype(np.float32) - 128) / 127.5
+    image = (np.abs(image) ** 2.0) * np.sign(image)
+    return image
+
+
+def dequantize_ee(image: ee.Image) -> ee.Image:
+    """
+    Dequantize an AlphaEarth embedding image with uint8 dtype.
+    """
+    image = image.float().subtract(128).divide(127.5)
+    image = image.abs().pow(2.0).multiply(image.signum())
+    return image
+
+
 __all__ = [
     "is_notebook",
     "merge_tif_directory",
     "merge_tif_files",
+    "quantize_numpy",
+    "quantize_ee",
+    "dequantize_numpy",
+    "dequantize_ee",
 ]
