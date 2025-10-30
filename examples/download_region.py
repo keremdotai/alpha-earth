@@ -31,7 +31,7 @@ def parse_args() -> dict:
     )  # --scale 1000
     parser.add_argument(
         "--dtype",
-        choices=["uint8", "uint16", "float32", "float64"],
+        choices=["uint8", "float32"],
         default="float32",
         help="Data type of the output file. (default: float32)",
     )  # --dtype float32
@@ -67,7 +67,7 @@ def main(
     downloader.download_by_region(
         output_dir=OUTPUTS_DIR / country / str(year),
         start_date=f"{year}-01-01",
-        end_date=f"{year + 1}-01-31",
+        end_date=f"{year}-12-31",
         region=geometry,
         scale=scale,
         dtype=dtype,

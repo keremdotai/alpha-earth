@@ -37,7 +37,7 @@ def parse_args() -> dict:
     )  # --scale 1000
     parser.add_argument(
         "--dtype",
-        choices=["uint8", "uint16", "float32", "float64"],
+        choices=["uint8", "float32"],
         default="float32",
         help="Data type of the output file. (default: float32)",
     )  # --dtype float32
@@ -72,7 +72,7 @@ def main(
     downloader.download_by_latlon(
         output_dir=output_dir,
         start_date=f"{year}-01-01",
-        end_date=f"{year + 1}-01-31",
+        end_date=f"{year}-12-31",
         min_lat=min_lat,
         max_lat=max_lat,
         min_lon=min_lon,

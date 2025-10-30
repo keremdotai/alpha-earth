@@ -10,7 +10,12 @@ def parse_args() -> dict:
     parser = argparse.ArgumentParser(
         "Download AlphaEarth embeddings for a UTM coordinate range."
     )
-    parser.add_argument("project", type=str, help="Google Cloud project ID.")
+    parser.add_argument(
+        "--project",
+        type=str,
+        default="keremdotai-2025",
+        help="Google Cloud project ID.",
+    )
     parser.add_argument(
         "--utm_zone", type=int, default=35, help="UTM zone number."
     )  # --utm_zone 35
@@ -49,7 +54,7 @@ def parse_args() -> dict:
     )  # --scale 1000
     parser.add_argument(
         "--dtype",
-        choices=["uint8", "uint16", "float32", "float64"],
+        choices=["uint8", "float32"],
         default="float32",
         help="Data type of the output file. (default: float32)",
     )  # --dtype float32
@@ -91,7 +96,7 @@ def main(
     downloader.download_by_utm(
         output_dir=output_dir,
         start_date=f"{year}-01-01",
-        end_date=f"{year + 1}-01-31",
+        end_date=f"{year}-12-31",
         utm_zone=utm_zone,
         min_easting=min_easting,
         max_easting=max_easting,
